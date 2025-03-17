@@ -2,8 +2,7 @@ const express = require('express');
 const axios = require('axios');
 const app = express();
 
-// In-memory storage for user tokens (temporary)
-const userTokens = {};
+// In-memory storage for user profiles (temporary)
 const userProfiles = {};
 
 // Retrieve secrets from environment variables
@@ -11,13 +10,12 @@ const CLIENT_ID = process.env.CLIENT_ID;
 const CLIENT_SECRET = process.env.CLIENT_SECRET;
 const REDIRECT_URI = process.env.REDIRECT_URI;
 
-// Handle Google OAuth Callback
 app.get('/auth/google/callback', async (req, res) => {
     const authCode = req.query.code;
-    const state = req.query.state;
+    const state = req.query.state; // Capture the state parameter from Unity
 
     if (!authCode || !state) {
-        return res.status(400).send('Missing authorization code or state.');
+        return res.status(400).send('Missing authorization code or state parameter.');
     }
 
     try {
@@ -32,7 +30,7 @@ app.get('/auth/google/callback', async (req, res) => {
             },
         });
 
-        const { access_token, refresh_token } = tokenResponse.data;
+        const { access_token } = tokenResponse.data;
 
         // Fetch user profile information
         const userResponse = await axios.get('https://www.googleapis.com/oauth2/v2/userinfo', {
@@ -41,11 +39,10 @@ app.get('/auth/google/callback', async (req, res) => {
 
         const userProfile = userResponse.data;
 
-        // Store tokens and user profile in memory
-        userTokens[state] = { access_token, refresh_token };
+        // Store the profile data using the state as the key
         userProfiles[state] = userProfile;
 
-        // Inform Unity to return to the app
+        // Inform the user to return to Unity
         res.send('<html><body>Google Auth Successful! You can now return to the app.</body></html>');
     } catch (error) {
         console.error('Error during authentication:', error);
@@ -53,24 +50,16 @@ app.get('/auth/google/callback', async (req, res) => {
     }
 });
 
-// Endpoint to retrieve profile data with token
-app.get('/getProfile', async (req, res) => {
+// Endpoint for Unity to retrieve the profile data
+app.get('/getProfile', (req, res) => {
     const state = req.query.state;
 
-    if (!userTokens[state]) {
-        return res.status(404).send('User not found or token expired.');
-    }
-
-    const { access_token } = userTokens[state];
-
-    try {
-        const userResponse = await axios.get('https://www.googleapis.com/oauth2/v2/userinfo', {
-            headers: { Authorization: `Bearer ${access_token}` },
-        });
-
-        res.json(userResponse.data);
-    } catch (error) {
-        res.status(401).send('Token expired or invalid.');
+    if (state && userProfiles[state]) {
+        const profile = userProfiles[state];
+        delete userProfiles[state]; // Remove from storage after retrieval
+        res.json(profile);
+    } else {
+        res.status(404).send('Profile not found.');
     }
 });
 
