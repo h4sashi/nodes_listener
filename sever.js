@@ -30,19 +30,19 @@ app.get('/auth/google/callback', async (req, res) => {
                 grant_type: 'authorization_code',
             },
         });
-
-        const { access_token } = tokenResponse.data; // Store access token
-
-        // Fetch user profile information
+        
+        const { access_token, scope } = tokenResponse.data;
+        console.log("Access Token Scope:", scope); // Debugging: See what scopes are returned
+        
+        // Fetch user profile
         const userResponse = await axios.get('https://www.googleapis.com/oauth2/v2/userinfo', {
             headers: { Authorization: `Bearer ${access_token}` },
         });
-
+        
         const userProfile = userResponse.data;
-        userProfile.access_token = access_token; // Add access_token to user profile
-
-        // Store the profile data using state as the key
+        userProfile.access_token = access_token; // Store access token in user profile
         userProfiles[state] = userProfile;
+        
 
         res.send('<html><body>Google Auth Successful! You can now return to the app.</body></html>');
 
